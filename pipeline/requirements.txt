@@ -1,0 +1,17 @@
+fastapi[standard]
+uvicorn[standard]
+pydantic
+pydantic-settings
+httpx
+networkx
+shapely
+numpy
+pillow
+pyproj
+rasterio
+pystac-client
+planetary-computer
+torch
+torchvision
+timm
+

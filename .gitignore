@@ -1,11 +1,6 @@
-.env
-.venv/
-venv/
+.DS_Store
 __pycache__/
 *.py[cod]
-*$py.class
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-*.egg-info/
-.DS_Store
+.venv/
+.env
+.env.local

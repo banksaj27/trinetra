@@ -1,0 +1,111 @@
+from __future__ import annotations
+
+from datetime import date
+from typing import Any, Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+DamageLevel = Literal["destroyed", "major-damage", "minor-damage", "no-damage"]
+DependencyType = Literal["power", "water", "communications"]
+
+
+class PipelineRunRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    latitude: float
+    longitude: float
+    radius_km: float = Field(gt=0)
+    disaster_date: str
+
+    @field_validator("disaster_date")
+    @classmethod
+    def _validate_disaster_date(cls, value: str) -> str:
+        date.fromisoformat(value)
+        return value
+
+
+class DamageObservation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    observation_id: str
+    asset_id: str
+    asset_type: str
+    damage_level: DamageLevel
+    confidence: float
+    source: Literal["imagery"] = "imagery"
+    source_detail: str
+    lat: float
+    lon: float
+    timestamp: str
+    scenario_time: Optional[str] = None
+    raw: dict[str, Any]
+
+    @field_validator("confidence")
+    @classmethod
+    def _round_confidence(cls, value: float) -> float:
+        return round(float(value), 4)
+
+    @field_validator("raw")
+    @classmethod
+    def _validate_raw(cls, value: dict[str, Any]) -> dict[str, Any]:
+        required_raw_keys = {"model", "chip_size", "input_channels", "class_probabilities"}
+        optional_raw_keys = {"pre_crop_b64", "post_crop_b64"}
+        allowed_raw_keys = required_raw_keys | optional_raw_keys
+        if not required_raw_keys.issubset(value) or set(value) - allowed_raw_keys:
+            raise ValueError(
+                f"raw must contain {sorted(required_raw_keys)} and only optional crop preview keys"
+            )
+
+        probabilities = value.get("class_probabilities")
+        if not isinstance(probabilities, dict):
+            raise ValueError("raw.class_probabilities must be an object")
+
+        expected_probability_keys = {"no-damage", "minor-damage", "major-damage", "destroyed"}
+        if set(probabilities) != expected_probability_keys:
+            raise ValueError(
+                "raw.class_probabilities must contain exactly no-damage, minor-damage, major-damage, destroyed"
+            )
+
+        value["model"] = str(value["model"])
+        value["chip_size"] = int(value["chip_size"])
+        value["input_channels"] = int(value["input_channels"])
+        value["class_probabilities"] = {
+            label: round(float(probabilities[label]), 4)
+            for label in ("no-damage", "minor-damage", "major-damage", "destroyed")
+        }
+        for key in optional_raw_keys:
+            if key in value and value[key] is not None:
+                value[key] = str(value[key])
+        return value
+
+
+class AssetRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    asset_id: str
+    asset_type: str
+    name: str
+    latitude: float
+    longitude: float
+    criticality_tier: int
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class DependencyEdge(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    upstream_id: str
+    downstream_id: str
+    dependency_type: DependencyType
+    criticality: str
+
+
+class PipelineResultResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str
+    assets: list[AssetRecord]
+    edges: list[DependencyEdge]
+    damage_observations: list[DamageObservation]
+
