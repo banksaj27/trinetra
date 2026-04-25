@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+asyncpg
+numpy
+pillow
+pyproj
+torch
+torchvision
+timm
+rasterio
+pystac-client
+planetary-computer
