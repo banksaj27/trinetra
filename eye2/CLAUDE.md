@@ -12,6 +12,14 @@ exist. By the time data reaches the cascade engine, damage has been
 detected, geo-correlated to a known asset, and the dependency graph is
 populated in PostGIS and loaded into memory as a NetworkX DiGraph.
 
+## Repo layout
+
+The repository now contains three sibling directories at its root:
+`eye1/` (CV damage detection), `eye2/` (this project — infrastructure
+graph + cascade engine), and `pipeline/` (the unified pipeline that
+orchestrates both). This `CLAUDE.md` covers `eye2/` specifically; the
+broader repo has more outside this directory.
+
 ## My role in this repo
 
 I build and maintain the cascade engine: BFS traversal of the dependency
@@ -25,7 +33,9 @@ I do not build two outputs. I do not modify the graph; I read from it.
 The engine is a pure function: `run_cascade(observation, graph_service) ->
 CascadeAnalysis`. It reads `app/services/graph_builder.py:GraphService`
 which exposes `self._graph` (networkx.DiGraph with full edge data) and
-`self._nodes` (dict[UUID, NodeData]). Edges go upstream → downstream
+`self._node_attrs` (dict[uuid.UUID, dict]) — graph nodes are stored as
+raw dicts with keys `asset_type`, `criticality_tier`, `population_served`,
+`name`. There is no `NodeData` type. Edges go upstream → downstream
 (provider → dependent). Cascade traverses `out_edges` from the damaged
 asset. Output schema is fixed by Section 4.1.5 of the architecture doc and
 must not drift.
@@ -74,10 +84,10 @@ an exception below.
 
 ## What I'm working on now
 
-Building `app/services/cascade_engine.py` plus
-`tests/test_cascade_engine.py`. The engine is a pure function with no
-DB writes and no API surface in this step — wiring into FastAPI and
-persisting `CascadeAnalysis` records to a new table comes next.
+`app/services/cascade_engine.py` is complete and verified against the
+current GraphService interface. About to write pytest tests at
+`tests/test_cascade_engine.py`. Step 3 — FastAPI wiring, a
+`cascade_analyses` table, and the Alembic migration — is next.
 
 ## Things to never do
 
