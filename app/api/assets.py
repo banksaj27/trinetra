@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, text
@@ -101,6 +102,67 @@ async def list_assets(
     )
     features = [_row_to_feature(r) for r in result]
     return AssetCollection(features=features, total_count=total)
+
+
+@router.get("/export")
+async def export_assets(
+    asset_type: str | None = None,
+    criticality_tier: int | None = Query(None, ge=1, le=4),
+    bbox: str | None = Query(None, description="minx,miny,maxx,maxy"),
+    db: AsyncSession = Depends(get_db),
+):
+    clauses = ""
+    params: dict = {}
+    if asset_type:
+        clauses += " AND asset_type = :asset_type"
+        params["asset_type"] = asset_type
+    if criticality_tier is not None:
+        clauses += " AND criticality_tier = :criticality_tier"
+        params["criticality_tier"] = criticality_tier
+    if bbox:
+        try:
+            parts = [float(x) for x in bbox.split(",")]
+        except ValueError as exc:
+            raise HTTPException(400, "bbox must be minx,miny,maxx,maxy") from exc
+        if len(parts) != 4:
+            raise HTTPException(400, "bbox must be minx,miny,maxx,maxy")
+        clauses += " AND ST_Within(geometry, ST_MakeEnvelope(:minx,:miny,:maxx,:maxy, 4326))"
+        params["minx"], params["miny"], params["maxx"], params["maxy"] = parts
+
+    result = await db.execute(
+        text(
+            """
+            SELECT
+                id,
+                name,
+                asset_type,
+                ST_Y(geometry) AS latitude,
+                ST_X(geometry) AS longitude
+            FROM infrastructure_assets
+            WHERE 1=1
+            """
+            + clauses
+            + " ORDER BY asset_type, name"
+        ),
+        params,
+    )
+
+    assets = [
+        {
+            "asset_id": str(row.id),
+            "asset_type": row.asset_type,
+            "name": row.name,
+            "latitude": round(row.latitude, 6),
+            "longitude": round(row.longitude, 6),
+        }
+        for row in result
+    ]
+
+    return {
+        "assets": assets,
+        "total": len(assets),
+        "exported_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+    }
 
 
 _GET_ONE_SQL = text("""
