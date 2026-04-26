@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     DEFAULT_DISASTER_DATE: str = date.today().isoformat()
     RESULTS_CACHE_TTL_SECONDS: int = 3600
     INCLUDE_CROP_IMAGES: bool = True
+    # Eye 3 — Twitter credentials
+    TWITTER_USERNAME: str = ""
+    TWITTER_EMAIL: str = ""
+    TWITTER_PASSWORD: str = ""
 
     class Config:
         env_file = ".env"
