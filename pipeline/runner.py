@@ -207,7 +207,8 @@ async def run_pipeline(params: PipelineRunRequest) -> AsyncIterator[dict[str, An
         params.latitude,
         params.longitude,
         params.radius_km,
-        result.ground_sensor_data_type,
+        result.detected_event_type,
+        params.disaster_date,
     )
     yield status(5, "Fetching ground sensor data...", f"Retrieved {len(sensor_points)} sensor points")
 
@@ -235,7 +236,8 @@ async def run_pipeline(params: PipelineRunRequest) -> AsyncIterator[dict[str, An
         eye2_task = asyncio.create_task(
             assess_ground_severity(
                 assets=result.assets,
-                sensor_points=sensor_points,
+                sensor_rows=sensor_points,
+                event_type=result.detected_event_type,
                 sensor_type=result.ground_sensor_data_type,
                 progress=ground_progress,
             )

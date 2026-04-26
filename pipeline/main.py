@@ -196,7 +196,7 @@ async def index() -> HTMLResponse:
           if (eventName === "status") {{
             setProgress(data);
             if (data.step === 1 && data.detail && data.detail.startsWith("Detected:")) {{
-              const match = data.detail.match(/Detected:\s*(\S+)/);
+              const match = data.detail.match(/Detected:\\s*(\\S+)/u);
               if (match) document.getElementById("event_type_display").value = match[1];
             }}
           }}

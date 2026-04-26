@@ -95,6 +95,8 @@ class GroundSensorObservation(BaseModel):
     observation_id: str
     asset_id: str
     asset_type: str
+    eye_2_damage_class: DamageLevel
+    eye_2_class_probs: dict[str, float]
     severity_level: Literal["critical", "high", "moderate", "low"]
     confidence: float
     source: Literal["ground-sensor"] = "ground-sensor"
@@ -110,6 +112,14 @@ class GroundSensorObservation(BaseModel):
     @classmethod
     def _round_confidence(cls, value: float) -> float:
         return round(float(value), 4)
+
+    @field_validator("eye_2_class_probs")
+    @classmethod
+    def _validate_eye2_probs(cls, value: dict) -> dict:
+        expected = {"no-damage", "minor-damage", "major-damage", "destroyed"}
+        if set(value) != expected:
+            raise ValueError(f"eye_2_class_probs must contain exactly: {sorted(expected)}")
+        return {k: round(float(v), 6) for k, v in value.items()}
 
 
 class AssetRecord(BaseModel):
