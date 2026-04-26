@@ -2,12 +2,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 import time
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, AsyncIterator
 
 import networkx as nx
+
+# Make the repo root importable so eye3 can be imported as a package.
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 try:
     from .asset_fetcher import fetch_assets
@@ -18,10 +25,12 @@ try:
     from .ground_severity_assessor import assess_ground_severity
     from .graph_builder import build_graph
     from .imagery_fetcher import fetch_imagery
+    from .score_aggregator import aggregate_damage_level
     from .schemas import (
         DamageObservation,
         EventType,
         GroundSensorObservation,
+        TweetSentimentObservation,
         PipelineResultResponse,
         PipelineRunRequest,
     )
@@ -34,13 +43,18 @@ except ImportError:  # Support `cd pipeline && uvicorn main:app`.
     from ground_severity_assessor import assess_ground_severity
     from graph_builder import build_graph
     from imagery_fetcher import fetch_imagery
+    from score_aggregator import aggregate_damage_level
     from schemas import (
         DamageObservation,
         EventType,
         GroundSensorObservation,
+        TweetSentimentObservation,
         PipelineResultResponse,
         PipelineRunRequest,
     )
+
+# eye3 lives at the repo root — always imported via the absolute package name.
+from eye3.tweet_sentiment_assessor import assess_tweet_sentiment
 
 TOTAL_STEPS = 7
 MAX_CACHE_AGE = 3600
@@ -56,8 +70,12 @@ class PipelineResult:
     damage_observations: list[dict[str, Any]] = field(default_factory=list)
     ground_sensor_data_type: str = "multimodal"
     ground_sensor_observations: list[dict[str, Any]] = field(default_factory=list)
+    tweet_sentiment_observation: dict[str, Any] | None = None
 
     def response_payload(self) -> dict[str, Any]:
+        tweet_obs = None
+        if self.tweet_sentiment_observation is not None:
+            tweet_obs = TweetSentimentObservation.model_validate(self.tweet_sentiment_observation)
         response = PipelineResultResponse(
             run_id=self.run_id,
             detected_event_type=self.detected_event_type,
@@ -69,6 +87,7 @@ class PipelineResult:
             ],
             ground_sensor_data_type=self.ground_sensor_data_type,
             ground_sensor_observations=self.ground_sensor_observations,
+            tweet_sentiment_observation=tweet_obs,
         )
         return response.model_dump()
 
@@ -114,6 +133,10 @@ def store_result(result: PipelineResult) -> None:
         GroundSensorObservation.model_validate(observation).model_dump()
         for observation in result.ground_sensor_observations
     ]
+    if result.tweet_sentiment_observation is not None:
+        result.tweet_sentiment_observation = (
+            TweetSentimentObservation.model_validate(result.tweet_sentiment_observation).model_dump()
+        )
     RESULTS_CACHE[result.run_id] = {"result": result, "created_at": now}
 
 
@@ -212,8 +235,8 @@ async def run_pipeline(params: PipelineRunRequest) -> AsyncIterator[dict[str, An
     )
     yield status(5, "Fetching ground sensor data...", f"Retrieved {len(sensor_points)} sensor points")
 
-    # ── Step 6: Run Eye 1 (satellite) + Eye 2 (ground sensor) in parallel ────
-    yield status(6, "Running Eyes 1 & 2 in parallel...", "Damage assessment and ground severity running concurrently")
+    # ── Step 6: Run Eyes 1, 2 & 3 in parallel ────────────────────────────────
+    yield status(6, "Running Eyes 1, 2 & 3 in parallel...", "Satellite, ground sensor, and social media running concurrently")
 
     eye_progress_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
@@ -222,6 +245,9 @@ async def run_pipeline(params: PipelineRunRequest) -> AsyncIterator[dict[str, An
 
     async def ground_progress(detail: str) -> None:
         await eye_progress_queue.put(status(6, "Eye 2 — ground sensor severity", detail))
+
+    async def tweet_progress(detail: str) -> None:
+        await eye_progress_queue.put(status(6, "Eye 3 — Twitter sentiment", detail))
 
     try:
         eye1_task = asyncio.create_task(
@@ -242,28 +268,53 @@ async def run_pipeline(params: PipelineRunRequest) -> AsyncIterator[dict[str, An
                 progress=ground_progress,
             )
         )
+        eye3_task = asyncio.create_task(
+            assess_tweet_sentiment(
+                latitude=params.latitude,
+                longitude=params.longitude,
+                disaster_date=params.disaster_date,
+                event_type=result.detected_event_type,
+                progress=tweet_progress,
+            )
+        )
 
         # Wrap gather so _drain_progress has a single task to watch
-        async def _gather_eyes() -> tuple[list, list]:
-            return await asyncio.gather(eye1_task, eye2_task)
+        async def _gather_eyes() -> tuple[list, list, Any]:
+            return await asyncio.gather(eye1_task, eye2_task, eye3_task)
 
         combined_task = asyncio.create_task(_gather_eyes())
         async for event in _drain_progress(combined_task, eye_progress_queue):
             yield event
-        eye1_result, eye2_result = await combined_task
+        eye1_result, eye2_result, eye3_result = await combined_task
     finally:
         imagery.close()
 
-    result.damage_observations = eye1_result
+    # ── Aggregate: combine Eye 1 base with Eyes 2 & 3 confidence modifiers ──
+    # aggregate_damage_level waits for all three eyes implicitly (they are
+    # already resolved by asyncio.gather above). If Eye 2 or Eye 3 produced
+    # no usable output their weight is silently dropped and renormalised.
+    try:
+        aggregated_eye1 = aggregate_damage_level(eye1_result, eye2_result, eye3_result)
+    except Exception as exc:
+        # Aggregation failure must never crash the pipeline — fall back to
+        # raw Eye 1 output unchanged.
+        import logging
+        logging.getLogger(__name__).error("score_aggregator failed, using raw Eye 1: %s", exc)
+        aggregated_eye1 = eye1_result
+
+    result.damage_observations = aggregated_eye1
     result.ground_sensor_observations = eye2_result
+    result.tweet_sentiment_observation = eye3_result
 
     skipped = len(result.assets) - len(result.damage_observations)
+    eye3_status = "found tweet" if eye3_result is not None else "no tweet found"
     yield status(
         6,
-        "Running Eyes 1 & 2 in parallel...",
+        "Running Eyes 1, 2 & 3 in parallel...",
         (
             f"Eye 1: assessed {len(result.damage_observations)} assets (skipped {skipped}); "
-            f"Eye 2: {len(sensor_points)} sensor points → {len(result.ground_sensor_observations)} observations"
+            f"Eye 2: {len(sensor_points)} sensor points → {len(result.ground_sensor_observations)} observations; "
+            f"Eye 3: {eye3_status}"
         ),
     )
 

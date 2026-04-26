@@ -15,4 +15,6 @@ planetary-computer
 torch
 torchvision
 timm
+transformers
+twikit
 
