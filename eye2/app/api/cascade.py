@@ -52,6 +52,13 @@ def _lookup_name(asset_id: uuid.UUID | str) -> str:
     return str(attrs.get("name") or "")
 
 
+def _enrich_affected_with_names(analysis: CascadeAnalysis) -> CascadeAnalysis:
+    for asset in analysis.impact_summary.affected_assets:
+        if not asset.name:
+            asset.name = _lookup_name(asset.asset_id)
+    return analysis
+
+
 @router.post("/cascade", response_model=StoredCascadeAnalysis)
 async def create_cascade(
     observation: DamageObservation,
@@ -92,6 +99,7 @@ async def create_cascade(
         await db.refresh(record)
 
     analysis = CascadeAnalysis.model_validate(record.cascade)
+    analysis = _enrich_affected_with_names(analysis)
     return StoredCascadeAnalysis(id=record.id, **analysis.model_dump())
 
 
@@ -153,4 +161,5 @@ async def get_cascade(
         raise HTTPException(status_code=404, detail="Cascade analysis not found")
 
     analysis = CascadeAnalysis.model_validate(record.cascade)
+    analysis = _enrich_affected_with_names(analysis)
     return StoredCascadeAnalysis(id=record.id, **analysis.model_dump())
