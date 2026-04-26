@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -19,6 +22,17 @@ router = APIRouter(prefix="/api/v1/analysis", tags=["cascade"])
 
 class StoredCascadeAnalysis(CascadeAnalysis):
     id: uuid.UUID
+
+
+class CascadePrioritySummary(BaseModel):
+    id: uuid.UUID
+    root_asset_id: uuid.UUID
+    priority_score: float
+    hours_to_first_critical_failure: float
+    total_population_impacted: int
+    critical_facilities_impacted: int
+    created_at: datetime
+    restoration_priority: int
 
 
 @router.post("/cascade", response_model=StoredCascadeAnalysis)
@@ -50,6 +64,37 @@ async def create_cascade(
     await db.refresh(record)
 
     return StoredCascadeAnalysis(id=record.id, **result.model_dump())
+
+
+@router.get("/priorities", response_model=list[CascadePrioritySummary])
+async def list_priorities(
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+) -> list[CascadePrioritySummary]:
+    stmt = (
+        select(CascadeAnalysisRecord)
+        .order_by(
+            CascadeAnalysisRecord.priority_score.desc(),
+            CascadeAnalysisRecord.created_at.desc(),
+        )
+        .limit(limit)
+        .offset(offset)
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+    return [
+        CascadePrioritySummary(
+            id=r.id,
+            root_asset_id=r.root_asset_id,
+            priority_score=r.priority_score,
+            hours_to_first_critical_failure=r.hours_to_first_critical_failure,
+            total_population_impacted=r.total_population_impacted,
+            critical_facilities_impacted=r.critical_facilities_impacted,
+            created_at=r.created_at,
+            restoration_priority=offset + i + 1,
+        )
+        for i, r in enumerate(rows)
+    ]
 
 
 @router.get("/cascade/{cascade_id}", response_model=StoredCascadeAnalysis)

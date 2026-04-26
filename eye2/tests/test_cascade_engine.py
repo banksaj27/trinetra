@@ -117,7 +117,7 @@ def test_destroyed_substation_full_cascade(graph_fixture):
 
     result = run_cascade(obs, svc)
 
-    assert result.total_population_impacted == 32000
+    assert result.total_population_impacted == 33000
     assert result.critical_facilities_impacted == 1
     assert result.priority_score > 0
 

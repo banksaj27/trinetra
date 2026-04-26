@@ -22,6 +22,13 @@ from pydantic import BaseModel, ConfigDict, Field
 logger = logging.getLogger(__name__)
 
 
+# Hackathon fallback: HIFLD loader doesn't assign population_served to every
+# asset type (hospitals, cell towers, etc.). Substitute this value when a
+# downstream node has 0/None so priority_score is non-zero. Remove once
+# the loader populates real census-derived values for all asset types.
+POPULATION_FALLBACK = 1000
+
+
 # ---------------------------------------------------------------------------
 # Output contracts (architecture doc §4.1.5)
 # ---------------------------------------------------------------------------
@@ -200,7 +207,7 @@ def _traverse_cascade(
                 "dependency_type": dep_type,
                 "failover_time_minutes": edge_failover,
                 "time_to_failure_minutes": child_ttf,
-                "population_served": child_attrs.get("population_served") or 0,
+                "population_served": child_attrs.get("population_served") or POPULATION_FALLBACK,
             }
 
             if existing is not None:

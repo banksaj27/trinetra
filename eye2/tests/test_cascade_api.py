@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.config import settings
 from app.database import get_db
 from app.main import app
+from app.models.cascade_analysis import CascadeAnalysisRecord
 from app.services.graph_builder import graph_service
 
 
@@ -132,3 +133,84 @@ async def test_post_unknown_root_returns_400(client):
     }
     resp = await client.post("/api/v1/analysis/cascade", json=payload)
     assert resp.status_code == 400
+
+
+async def _seed_priority_rows(db_engine, scores):
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+    inserted_ids = []
+    async with session_factory() as session:
+        await session.execute(text("TRUNCATE cascade_analyses"))
+        for score in scores:
+            record = CascadeAnalysisRecord(
+                cascade_id=f"cascade-priority-{uuid.uuid4()}",
+                observation_id=f"obs-priority-{score}",
+                root_asset_id=uuid.uuid4(),
+                analysis_time=datetime.now(timezone.utc),
+                total_population_impacted=int(score * 1000),
+                critical_facilities_impacted=int(score),
+                restoration_priority=0,
+                priority_score=score,
+                hours_to_first_critical_failure=score,
+                severity_multiplier=1.0,
+                urgency_multiplier=1.0,
+                cascade={"priority_score": score},
+            )
+            session.add(record)
+        await session.commit()
+        for r in (
+            await session.execute(
+                text(
+                    "SELECT id, priority_score FROM cascade_analyses ORDER BY priority_score DESC"
+                )
+            )
+        ).all():
+            inserted_ids.append(r)
+    return inserted_ids
+
+
+async def test_priorities_sorted_with_rank(client, db_engine):
+    await _seed_priority_rows(db_engine, [9.0, 5.0, 1.0])
+
+    resp = await client.get("/api/v1/analysis/priorities")
+    assert resp.status_code == 200, resp.text
+    items = resp.json()
+
+    assert len(items) == 3
+    assert [item["priority_score"] for item in items] == [9.0, 5.0, 1.0]
+    assert [item["restoration_priority"] for item in items] == [1, 2, 3]
+    expected_keys = {
+        "id",
+        "root_asset_id",
+        "priority_score",
+        "hours_to_first_critical_failure",
+        "total_population_impacted",
+        "critical_facilities_impacted",
+        "created_at",
+        "restoration_priority",
+    }
+    assert set(items[0].keys()) == expected_keys
+
+
+async def test_priorities_limit_and_offset(client, db_engine):
+    await _seed_priority_rows(db_engine, [9.0, 5.0, 1.0])
+
+    resp = await client.get("/api/v1/analysis/priorities?limit=1")
+    assert resp.status_code == 200
+    items = resp.json()
+    assert len(items) == 1
+    assert items[0]["priority_score"] == 9.0
+    assert items[0]["restoration_priority"] == 1
+
+    resp = await client.get("/api/v1/analysis/priorities?limit=1&offset=1")
+    assert resp.status_code == 200
+    items = resp.json()
+    assert len(items) == 1
+    assert items[0]["priority_score"] == 5.0
+    assert items[0]["restoration_priority"] == 2
+
+    resp = await client.get("/api/v1/analysis/priorities?limit=2&offset=1")
+    assert resp.status_code == 200
+    items = resp.json()
+    assert len(items) == 2
+    assert [item["priority_score"] for item in items] == [5.0, 1.0]
+    assert [item["restoration_priority"] for item in items] == [2, 3]
