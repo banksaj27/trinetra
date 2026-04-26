@@ -135,7 +135,13 @@ async def index() -> HTMLResponse:
         <label>Longitude <input id="longitude" name="longitude" type="number" step="any" value="-121.8863" required></label>
         <label>Radius (km) <input id="radius_km" name="radius_km" type="number" step="any" min="0.1" value="{settings.DEFAULT_RADIUS_KM}" required></label>
       </div>
-      <label>Disaster date <input id="disaster_date" type="date" value="{settings.DEFAULT_DISASTER_DATE}" required></label>
+      <div class="grid-2">
+        <label>Disaster date <input id="disaster_date" type="date" value="{settings.DEFAULT_DISASTER_DATE}" required></label>
+        <label style="pointer-events:none; opacity:0.55;">
+          Event type (auto-detected)
+          <input id="event_type_display" placeholder="Detected after submit" readonly tabindex="-1">
+        </label>
+      </div>
       <div class="actions">
         <button id="run-button" type="submit">Run Pipeline</button>
       </div>
@@ -167,7 +173,7 @@ async def index() -> HTMLResponse:
       document.getElementById("progress-panel").classList.add("active");
       document.getElementById("progress-message").textContent = data.message || "Working...";
       document.getElementById("progress-detail").textContent = data.detail || "";
-      const pct = Math.max(0, Math.min(100, ((data.step || 0) / (data.total_steps || 5)) * 100));
+      const pct = Math.max(0, Math.min(100, ((data.step || 0) / (data.total_steps || 7)) * 100));
       document.getElementById("progress-bar").style.width = `${{pct}}%`;
     }}
 
@@ -187,9 +193,15 @@ async def index() -> HTMLResponse:
           const dataLine = lines.find((line) => line.startsWith("data:"));
           if (!dataLine) continue;
           const data = JSON.parse(dataLine.slice(5));
-          if (eventName === "status") setProgress(data);
+          if (eventName === "status") {{
+            setProgress(data);
+            if (data.step === 1 && data.detail && data.detail.startsWith("Detected:")) {{
+              const match = data.detail.match(/Detected:\\s*(\\S+)/u);
+              if (match) document.getElementById("event_type_display").value = match[1];
+            }}
+          }}
           if (eventName === "error") {{
-            setProgress({{ step: 5, total_steps: 5, message: "Pipeline failed", detail: data.detail || data.message }});
+            setProgress({{ step: 7, total_steps: 7, message: "Pipeline failed", detail: data.detail || data.message }});
             document.getElementById("progress-detail").classList.add("error");
           }}
           if (eventName === "complete" && data.redirect) {{
@@ -206,7 +218,7 @@ async def index() -> HTMLResponse:
     document.getElementById("pipeline-form").addEventListener("submit", async (event) => {{
       event.preventDefault();
       document.getElementById("run-button").disabled = true;
-      setProgress({{ step: 0, total_steps: 5, message: "Starting pipeline", detail: "Preparing request" }});
+      setProgress({{ step: 0, total_steps: 7, message: "Starting pipeline", detail: "Preparing request" }});
       const payload = {{
         latitude: Number(document.getElementById("latitude").value),
         longitude: Number(document.getElementById("longitude").value),
@@ -238,8 +250,8 @@ async def run(request: PipelineRunRequest) -> StreamingResponse:
                 {
                     "event": "error",
                     "data": {
-                        "step": 5,
-                        "total_steps": 5,
+                        "step": 7,
+                        "total_steps": 7,
                         "message": "Pipeline failed",
                         "detail": str(exc),
                     },
