@@ -106,6 +106,9 @@ def test_unaffected_returns_empty_cascade(graph_fixture):
     assert result.priority_score == 0.0
     assert result.total_population_impacted == 0
     assert result.impact_summary.affected_assets == []
+    assert result.hours_to_first_critical_failure == 0.0
+    assert result.severity_multiplier == 0.0
+    assert result.urgency_multiplier == 0.0
 
 
 def test_destroyed_substation_full_cascade(graph_fixture):
@@ -129,6 +132,11 @@ def test_destroyed_substation_full_cascade(graph_fixture):
         if a.asset_id == ids["cell_tower_pr_087"]
     )
     assert cell_tower.time_to_failure_minutes == 240
+
+    # hospital (tier 1) ttf=300 min → 5 h → clamped to URGENCY_MIN_HOURS=15.0
+    assert result.severity_multiplier == 1.0
+    assert result.hours_to_first_critical_failure == 15.0
+    assert result.urgency_multiplier == 4.0
 
 
 def test_minor_damage_caps_depth_to_one(graph_fixture):

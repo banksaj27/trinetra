@@ -53,6 +53,9 @@ class CascadeAnalysis(BaseModel):
     critical_facilities_impacted: int
     restoration_priority: int
     priority_score: float
+    hours_to_first_critical_failure: float
+    severity_multiplier: float
+    urgency_multiplier: float
     impact_summary: ImpactSummary
 
 
@@ -225,9 +228,10 @@ def _compute_priority_score(
     affected: list[dict],
     confidence: float,
     severity_multiplier: float,
-) -> float:
+) -> tuple[float, float, float]:
+    """Return (priority_score, hours_to_first_critical_failure, urgency_multiplier)."""
     if not affected:
-        return 0.0
+        return 0.0, 0.0, 0.0
 
     total_pop = sum(a["population_served"] for a in affected)
     max_criticality_tier = min(a["criticality_tier"] for a in affected)
@@ -251,7 +255,7 @@ def _compute_priority_score(
         * severity_multiplier
         * urgency
     )
-    return round(score, 4)
+    return round(score, 4), round(hours_to_first, 4), round(urgency, 4)
 
 
 def run_cascade(observation, graph_service) -> CascadeAnalysis:
@@ -275,6 +279,9 @@ def run_cascade(observation, graph_service) -> CascadeAnalysis:
             critical_facilities_impacted=0,
             restoration_priority=0,
             priority_score=0.0,
+            hours_to_first_critical_failure=0.0,
+            severity_multiplier=cfg["severity_multiplier"],
+            urgency_multiplier=0.0,
             impact_summary=ImpactSummary(
                 affected_assets=[], by_asset_type={}, by_cascade_depth={}
             ),
@@ -297,7 +304,7 @@ def run_cascade(observation, graph_service) -> CascadeAnalysis:
         1 for a in affected if a["criticality_tier"] == 1
     )
     total_population_impacted = sum(a["population_served"] for a in affected)
-    priority_score = _compute_priority_score(
+    priority_score, hours_to_first, urgency = _compute_priority_score(
         affected, observation.confidence, cfg["severity_multiplier"]
     )
 
@@ -310,5 +317,8 @@ def run_cascade(observation, graph_service) -> CascadeAnalysis:
         critical_facilities_impacted=critical_facilities_impacted,
         restoration_priority=0,
         priority_score=priority_score,
+        hours_to_first_critical_failure=hours_to_first,
+        severity_multiplier=cfg["severity_multiplier"],
+        urgency_multiplier=urgency,
         impact_summary=impact,
     )
