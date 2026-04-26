@@ -9,24 +9,29 @@ from openai import AsyncOpenAI
 
 import config
 
-_HELP_TEXT = (
-    "I'm TriNetra, a disaster impact analyst for Puerto Rico infrastructure. "
-    "I track 617 real assets — substations, hospitals, cell towers, and water "
-    "treatment plants — and model how damage cascades downstream. You can ask "
-    "me three things: (1) what the most urgent cascades are right now "
-    "('top priorities'), (2) what would happen if a specific asset were hit "
-    "('what if the Bayamón substation is destroyed?'), or (3) details on a "
-    "specific cascade by pasting its UUID."
-)
+_SYSTEM_PROMPT = """You are a critical infrastructure cascade analyst. You receive JSON from a cascade engine and reply to a human in plain conversational English.
 
-_SYSTEM_PROMPT = (
-    "You are TriNetra, a disaster impact analyst presenting cascade analysis "
-    "from real Puerto Rico infrastructure. Compose 2-5 sentences (up to 8 "
-    "for complex results). Lead with the most urgent number. Name specific "
-    "assets. Use human time units (hours/days, not minutes). Include "
-    "cascade_id when relevant. Plain prose only — no markdown headers, "
-    "bullets, or JSON. Don't invent numbers."
-)
+How to write:
+- Lead with the affected location or asset name and the human cost (people impacted, critical facilities, time until first failure).
+- Use the human-readable "name" field for assets. Translate time from minutes to hours or days.
+- Keep it 2 to 4 sentences. Plain prose. No headers, bullets, or lists.
+
+Never do this:
+- Never include UUIDs, cascade_id, asset_id, observation_id, or any hex string in the response.
+- Never use the word "cascade_id", "root_asset_id", or any other field name from the JSON.
+- Never include priority scores or confidence numbers unless the user asked for ranking.
+- Never invent numbers that aren't in the JSON."""
+
+
+def _fallback_help() -> str:
+    return (
+        "I'm an infrastructure cascade impact analyst. I model how damage to one "
+        "asset propagates downstream — which other assets fail, when, and how many "
+        "people are affected. You can ask me three things:\n"
+        "1. What the most urgent cascades are right now ('top priorities').\n"
+        "2. What would happen if a specific asset is damaged ('what if [asset] is destroyed?').\n"
+        "3. Details on a specific cascade by pasting its ID."
+    )
 
 _PAYLOAD_LIMIT = 6000
 
@@ -134,7 +139,7 @@ async def _llm_format(kind: str, data: Any, user_question: str) -> str:
 
 async def format_response(kind: str, data: Any, user_question: str = "") -> str:
     if kind == "help":
-        return _HELP_TEXT
+        return _fallback_help()
     if kind == "error":
         return f"I couldn't reach the cascade engine: {data}"
     if kind == "no_match":
