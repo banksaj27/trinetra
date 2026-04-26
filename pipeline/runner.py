@@ -278,9 +278,40 @@ async def run_pipeline(params: PipelineRunRequest) -> AsyncIterator[dict[str, An
             )
         )
 
-        # Wrap gather so _drain_progress has a single task to watch
+        # Wrap gather so _drain_progress has a single task to watch.
+        # return_exceptions=True ensures an Eye 2 or Eye 3 failure never cancels
+        # the other tasks or crashes step 6 — failed eyes are replaced with safe
+        # empty-list / None defaults and excluded from the aggregation weights.
         async def _gather_eyes() -> tuple[list, list, Any]:
-            return await asyncio.gather(eye1_task, eye2_task, eye3_task)
+            import logging as _logging
+            _log = _logging.getLogger(__name__)
+
+            eye1_r, eye2_r, eye3_r = await asyncio.gather(
+                eye1_task, eye2_task, eye3_task, return_exceptions=True
+            )
+
+            # Eye 1 failure is unrecoverable — propagate so the caller sees the error.
+            if isinstance(eye1_r, BaseException):
+                raise eye1_r
+
+            # Eyes 2 and 3: degrade gracefully on any exception.
+            if isinstance(eye2_r, BaseException):
+                _log.warning(
+                    "Eye 2 raised an exception — excluding from aggregation: %s",
+                    eye2_r,
+                    exc_info=eye2_r,
+                )
+                eye2_r = []
+
+            if isinstance(eye3_r, BaseException):
+                _log.warning(
+                    "Eye 3 raised an exception — excluding from aggregation: %s",
+                    eye3_r,
+                    exc_info=eye3_r,
+                )
+                eye3_r = None
+
+            return eye1_r, eye2_r, eye3_r
 
         combined_task = asyncio.create_task(_gather_eyes())
         async for event in _drain_progress(combined_task, eye_progress_queue):
