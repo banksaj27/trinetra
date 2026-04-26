@@ -9,13 +9,13 @@ TriNetra is a multi-agent system where a main cascade orchestrator coordinates w
 
 Links to our agents:
 
-@trinetraai: agent1q0s8yaewr3tvznfrzv8xe0t95aqnrfrv3jjfu3hjj8mqesx6t94qu4mxhk7
+@trinetraai: [https://agentverse.ai/agents/details/agent1q0s8yaewr3tvznfrzv8xe0t95aqnrfrv3jjfu3hjj8mqesx6t94qu4mxhk7/profile](url)
 
-@trinetra-eye1: agent1qwngtn9jy6ktv4ltf4k0j2asm69tvjccwnrpsn7dy3aup7thxw7d5vtj5xs
+@trinetra-eye1: [https://agentverse.ai/agents/details/agent1qwngtn9jy6ktv4ltf4k0j2asm69tvjccwnrpsn7dy3aup7thxw7d5vtj5xs/profile](url)
 
-@trinetra-eye2: agent1qdd3hdhlvcxy665urxa6kqzyga8jre7jc3l05v7qtedmx69v3ueg26s2pr3
+@trinetra-eye2: [https://agentverse.ai/agents/details/agent1qdd3hdhlvcxy665urxa6kqzyga8jre7jc3l05v7qtedmx69v3ueg26s2pr3/profile](url)
 
-@trinetra-eye3: agent1qwkpaz8l5t4fxlq9uncv4fk5gtnmgk87neuxdwkzygu4cze327kjjzl6cr6
+@trinetra-eye3: [https://agentverse.ai/agents/details/agent1qwkpaz8l5t4fxlq9uncv4fk5gtnmgk87neuxdwkzygu4cze327kjjzl6cr6/profile](url)
 
 ---
 
