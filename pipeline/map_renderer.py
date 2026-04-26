@@ -439,9 +439,6 @@ def render_result_page(result: Any, mapbox_token: str) -> str:
     const EDGE_COLORS = {_json_for_script(EDGE_COLORS)};
     const DAMAGE_ORDER = ["destroyed", "major-damage", "minor-damage", "no-damage", "skipped"];
     const EDGE_ORDER = ["power", "water", "communications"];
-    const SQUARE_ASSET_TYPES = ["substation", "cell_tower", "water_treatment"];
-    const SQUARE_TYPE_FILTER = ["any", ...SQUARE_ASSET_TYPES.map((type) => ["==", ["get", "asset_type"], type])];
-    const CIRCLE_TYPE_FILTER = ["!", SQUARE_TYPE_FILTER];
     const NODE_TYPE_LABELS = {{
       substation: "Substations",
       hospital: "Hospitals",
@@ -467,17 +464,14 @@ def render_result_page(result: Any, mapbox_token: str) -> str:
       return propertyInSetExpression("damage_level", visibleDamage);
     }}
 
-    function assetLayerFilter(visibleDamage, typeFilter = null) {{
-      const filters = ["all", damageFilterExpression(visibleDamage)];
-      if (typeFilter) filters.push(typeFilter);
-      return filters;
+    function assetLayerFilter(visibleDamage) {{
+      return ["all", damageFilterExpression(visibleDamage)];
     }}
 
     function applyAssetFilters(map, visibleDamage) {{
-      if (map.getLayer("assets-glow")) map.setFilter("assets-glow", assetLayerFilter(visibleDamage, CIRCLE_TYPE_FILTER));
-      if (map.getLayer("assets-points")) map.setFilter("assets-points", assetLayerFilter(visibleDamage, CIRCLE_TYPE_FILTER));
-      if (map.getLayer("assets-square-glow")) map.setFilter("assets-square-glow", assetLayerFilter(visibleDamage, SQUARE_TYPE_FILTER));
-      if (map.getLayer("assets-square-points")) map.setFilter("assets-square-points", assetLayerFilter(visibleDamage, SQUARE_TYPE_FILTER));
+      if (map.getLayer("assets-glow")) map.setFilter("assets-glow", assetLayerFilter(visibleDamage));
+      if (map.getLayer("assets-points")) map.setFilter("assets-points", assetLayerFilter(visibleDamage));
+      if (map.getLayer("assets-hit-area")) map.setFilter("assets-hit-area", assetLayerFilter(visibleDamage));
     }}
 
     function edgeLayerFilter(edgeType, visibleDamage) {{
@@ -612,12 +606,6 @@ def render_result_page(result: Any, mapbox_token: str) -> str:
       }}
       if (map.getLayer("assets-points")) {{
         map.setPaintProperty("assets-points", "circle-opacity", hasCascade ? ["case", selectedAsset, 0.98, 0.32] : 0.98);
-      }}
-      if (map.getLayer("assets-square-glow")) {{
-        map.setPaintProperty("assets-square-glow", "circle-opacity", hasCascade ? ["case", selectedAsset, 0.62, 0.1] : 0.52);
-      }}
-      if (map.getLayer("assets-square-points")) {{
-        map.setPaintProperty("assets-square-points", "icon-opacity", hasCascade ? ["case", selectedAsset, 0.98, 0.32] : 0.98);
       }}
     }}
 
@@ -858,53 +846,6 @@ def render_result_page(result: Any, mapbox_token: str) -> str:
       if (!bounds.isEmpty()) map.fitBounds(bounds, {{ padding: 80, maxZoom: 12, duration: 700 }});
     }}
 
-    function hexToRgba(hex, alpha = 1) {{
-      const normalized = String(hex || "").replace("#", "");
-      const value = normalized.length === 3
-        ? normalized.split("").map((char) => char + char).join("")
-        : normalized.padEnd(6, "0").slice(0, 6);
-      const intValue = Number.parseInt(value, 16);
-      const red = (intValue >> 16) & 255;
-      const green = (intValue >> 8) & 255;
-      const blue = intValue & 255;
-      return `rgba(${{red}}, ${{green}}, ${{blue}}, ${{alpha}})`;
-    }}
-
-    function squareImageData(color) {{
-      const size = 16;
-      const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext("2d");
-      const side = 7;
-      const inset = (size - side) / 2;
-      ctx.fillStyle = hexToRgba(color, 0.98);
-      ctx.fillRect(inset, inset, side, side);
-      ctx.strokeStyle = "rgba(248, 250, 252, 0.72)";
-      ctx.lineWidth = 0.7;
-      ctx.strokeRect(inset, inset, side, side);
-      const imageData = ctx.getImageData(0, 0, size, size);
-      return {{ width: size, height: size, data: imageData.data }};
-    }}
-
-    function addSquareImages(map) {{
-      for (const [level, color] of Object.entries(DAMAGE_COLORS)) {{
-        const coreId = `asset-square-core-${{level}}`;
-        if (!map.hasImage(coreId)) map.addImage(coreId, squareImageData(color), {{ pixelRatio: 1 }});
-      }}
-    }}
-
-    function squareIconExpression(prefix) {{
-      return [
-        "match", ["get", "damage_level"],
-        "destroyed", `${{prefix}}-destroyed`,
-        "major-damage", `${{prefix}}-major-damage`,
-        "minor-damage", `${{prefix}}-minor-damage`,
-        "no-damage", `${{prefix}}-no-damage`,
-        `${{prefix}}-skipped`
-      ];
-    }}
-
     function boot() {{
       if (!MAPBOX_TOKEN) {{
         const notice = document.createElement("section");
@@ -926,7 +867,7 @@ def render_result_page(result: Any, mapbox_token: str) -> str:
       }});
       map.addControl(new mapboxgl.NavigationControl({{ visualizePitch: true }}), "top-right");
 
-      const visibleDamage = new Set(DAMAGE_ORDER.filter((level) => level !== "skipped"));
+      const visibleDamage = new Set(DAMAGE_ORDER);
       const visibleEdges = new Set(EDGE_ORDER.filter((type) => type !== "water"));
       renderPanel(map, visibleDamage, visibleEdges);
 
@@ -949,7 +890,6 @@ def render_result_page(result: Any, mapbox_token: str) -> str:
         }}
 
         map.addSource("assets-source", {{ type: "geojson", data: ASSETS }});
-        addSquareImages(map);
         const damageColorExpression = [
           "match", ["get", "damage_level"],
           "destroyed", DAMAGE_COLORS.destroyed,
@@ -958,25 +898,11 @@ def render_result_page(result: Any, mapbox_token: str) -> str:
           "no-damage", DAMAGE_COLORS["no-damage"],
           DAMAGE_COLORS.skipped
         ];
-        const squareCoreIconSize = ["match", ["get", "criticality_tier"], 1, 1, 2, 0.8125, 0.65625];
         map.addLayer({{
           id: "assets-glow",
           type: "circle",
           source: "assets-source",
-          filter: assetLayerFilter(visibleDamage, CIRCLE_TYPE_FILTER),
-          paint: {{
-            "circle-color": damageColorExpression,
-            "circle-radius": ["match", ["get", "criticality_tier"], 1, 16, 2, 13, 10],
-            "circle-blur": 1.25,
-            "circle-opacity": 0.52,
-            "circle-emissive-strength": 1
-          }}
-        }});
-        map.addLayer({{
-          id: "assets-square-glow",
-          type: "circle",
-          source: "assets-source",
-          filter: assetLayerFilter(visibleDamage, SQUARE_TYPE_FILTER),
+          filter: assetLayerFilter(visibleDamage),
           paint: {{
             "circle-color": damageColorExpression,
             "circle-radius": ["match", ["get", "criticality_tier"], 1, 16, 2, 13, 10],
@@ -989,7 +915,7 @@ def render_result_page(result: Any, mapbox_token: str) -> str:
           id: "assets-points",
           type: "circle",
           source: "assets-source",
-          filter: assetLayerFilter(visibleDamage, CIRCLE_TYPE_FILTER),
+          filter: assetLayerFilter(visibleDamage),
           paint: {{
             "circle-color": damageColorExpression,
             "circle-radius": ["match", ["get", "criticality_tier"], 1, 3.2, 2, 2.6, 2.1],
@@ -1000,19 +926,14 @@ def render_result_page(result: Any, mapbox_token: str) -> str:
           }}
         }});
         map.addLayer({{
-          id: "assets-square-points",
-          type: "symbol",
+          id: "assets-hit-area",
+          type: "circle",
           source: "assets-source",
-          filter: assetLayerFilter(visibleDamage, SQUARE_TYPE_FILTER),
-          layout: {{
-            "icon-image": squareIconExpression("asset-square-core"),
-            "icon-size": squareCoreIconSize,
-            "icon-allow-overlap": true,
-            "icon-ignore-placement": true
-          }},
+          filter: assetLayerFilter(visibleDamage),
           paint: {{
-            "icon-opacity": 0.98,
-            "icon-emissive-strength": 1
+            "circle-color": "#ffffff",
+            "circle-radius": ["match", ["get", "criticality_tier"], 1, 16, 2, 13, 10],
+            "circle-opacity": 0
           }}
         }});
         let hoveredAssetId = null;
@@ -1038,8 +959,7 @@ def render_result_page(result: Any, mapbox_token: str) -> str:
             setDependencyHighlight(map, assetId);
           }});
         }}
-        attachAssetInteractions("assets-points");
-        attachAssetInteractions("assets-square-points");
+        attachAssetInteractions("assets-hit-area");
         if ((CASCADE.roots || []).length) setActiveCascade(map, "all");
         fitToAssets(map);
       }});
