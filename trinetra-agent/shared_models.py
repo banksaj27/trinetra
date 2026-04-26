@@ -37,3 +37,11 @@ class Eye3Response(Model):
     source: str
     message: str
     data: Optional[dict] = None
+
+
+class CascadeContext(Model):
+    """Aggregated specialist agent state used to enrich cascade analysis."""
+    asset_index_size: Optional[int] = None
+    disaster_profile: Optional[dict] = None
+    orchestration_status: Optional[str] = None
+    contributing_agents: list = []
