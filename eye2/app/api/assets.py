@@ -165,6 +165,30 @@ async def export_assets(
     }
 
 
+@router.get("/search")
+async def search_assets(
+    q: str = Query(..., min_length=1, description="Substring match against name"),
+    limit: int = Query(5, ge=1, le=20),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        text(
+            """
+            SELECT id, name, asset_type
+            FROM infrastructure_assets
+            WHERE name ILIKE :pattern
+            ORDER BY length(name), name
+            LIMIT :limit
+            """
+        ),
+        {"pattern": f"%{q}%", "limit": limit},
+    )
+    return [
+        {"asset_id": str(row.id), "name": row.name, "asset_type": row.asset_type}
+        for row in result
+    ]
+
+
 _GET_ONE_SQL = text("""
     SELECT
         id, name, asset_type, criticality_tier,

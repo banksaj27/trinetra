@@ -43,6 +43,7 @@ class AffectedAsset(BaseModel):
     failover_time_minutes: int
     time_to_failure_minutes: int
     population_served: int
+    name: str = ""
 
 
 class ImpactSummary(BaseModel):

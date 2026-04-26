@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.cascade_analysis import CascadeAnalysisRecord
 from app.services.cascade_engine import (
+    AffectedAsset,
     CascadeAnalysis,
     DamageObservation,
     run_cascade,
@@ -25,15 +26,37 @@ class StoredCascadeAnalysis(CascadeAnalysis):
     id: uuid.UUID
 
 
+class PriorityAffectedAsset(AffectedAsset):
+    name: str
+
+
 class CascadePrioritySummary(BaseModel):
     id: uuid.UUID
     root_asset_id: uuid.UUID
+    root_asset_name: str
     priority_score: float
     hours_to_first_critical_failure: float
     total_population_impacted: int
     critical_facilities_impacted: int
     created_at: datetime
     restoration_priority: int
+    affected_assets: list[PriorityAffectedAsset]
+
+
+def _lookup_name(asset_id: uuid.UUID | str) -> str:
+    try:
+        key = asset_id if isinstance(asset_id, uuid.UUID) else uuid.UUID(str(asset_id))
+    except (ValueError, TypeError):
+        return ""
+    attrs = graph_service._node_attrs.get(key) or {}
+    return str(attrs.get("name") or "")
+
+
+def _enrich_affected_with_names(analysis: CascadeAnalysis) -> CascadeAnalysis:
+    for asset in analysis.impact_summary.affected_assets:
+        if not asset.name:
+            asset.name = _lookup_name(asset.asset_id)
+    return analysis
 
 
 @router.post("/cascade", response_model=StoredCascadeAnalysis)
@@ -76,6 +99,7 @@ async def create_cascade(
         await db.refresh(record)
 
     analysis = CascadeAnalysis.model_validate(record.cascade)
+    analysis = _enrich_affected_with_names(analysis)
     return StoredCascadeAnalysis(id=record.id, **analysis.model_dump())
 
 
@@ -95,19 +119,35 @@ async def list_priorities(
         .offset(offset)
     )
     rows = (await db.execute(stmt)).scalars().all()
-    return [
-        CascadePrioritySummary(
-            id=r.id,
-            root_asset_id=r.root_asset_id,
-            priority_score=r.priority_score,
-            hours_to_first_critical_failure=r.hours_to_first_critical_failure,
-            total_population_impacted=r.total_population_impacted,
-            critical_facilities_impacted=r.critical_facilities_impacted,
-            created_at=r.created_at,
-            restoration_priority=offset + i + 1,
+    summaries: list[CascadePrioritySummary] = []
+    for i, r in enumerate(rows):
+        cascade_payload = r.cascade or {}
+        raw_affected = (
+            cascade_payload.get("impact_summary", {}).get("affected_assets", [])
+            or cascade_payload.get("affected_assets", [])
+            or []
         )
-        for i, r in enumerate(rows)
-    ]
+        affected = []
+        for a in raw_affected:
+            data = dict(a)
+            if not data.get("name"):
+                data["name"] = _lookup_name(data.get("asset_id"))
+            affected.append(PriorityAffectedAsset(**data))
+        summaries.append(
+            CascadePrioritySummary(
+                id=r.id,
+                root_asset_id=r.root_asset_id,
+                root_asset_name=_lookup_name(r.root_asset_id),
+                priority_score=r.priority_score,
+                hours_to_first_critical_failure=r.hours_to_first_critical_failure,
+                total_population_impacted=r.total_population_impacted,
+                critical_facilities_impacted=r.critical_facilities_impacted,
+                created_at=r.created_at,
+                restoration_priority=offset + i + 1,
+                affected_assets=affected,
+            )
+        )
+    return summaries
 
 
 @router.get("/cascade/{cascade_id}", response_model=StoredCascadeAnalysis)
@@ -120,4 +160,5 @@ async def get_cascade(
         raise HTTPException(status_code=404, detail="Cascade analysis not found")
 
     analysis = CascadeAnalysis.model_validate(record.cascade)
+    analysis = _enrich_affected_with_names(analysis)
     return StoredCascadeAnalysis(id=record.id, **analysis.model_dump())
