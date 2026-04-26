@@ -7,6 +7,8 @@ TriNetra is a disaster response intelligence system. It ingests data from three 
 ### Agentverse Agent
 TriNetra is a multi-agent system where a main cascade orchestrator coordinates with three specialist agents, Eye 1 (asset detection), Eye 2 (disaster heuristics), and Eye 3 (cascade orchestration), all registered as uAgents on Fetch.ai's Agentverse. When a user query arrives via ASI:One, the orchestrator dispatches coordination messages to all three Eye agents and assembles a unified cascade context from their responses. That context is then used to enrich the cascade engine's analysis, which traces dependent failures across 617 real infrastructure assets. The Eye agents communicate with the orchestrator, ensuring a consistent contract across the network. The result is returned to the user as natural-language prose, with a coordination banner confirming the activation of all our agents. 
 
+Chat session link: https://asi1.ai/shared-chat/a8776059-8258-4237-ad38-6faa1722e9bb
+
 Links to our agents:
 
 @trinetraai: https://agentverse.ai/agents/details/agent1q0s8yaewr3tvznfrzv8xe0t95aqnrfrv3jjfu3hjj8mqesx6t94qu4mxhk7/profile
