@@ -82,12 +82,43 @@ an exception below.
 - No new dependencies without a clear reason — networkx, sqlalchemy,
   pydantic, fastapi, asyncpg are the load-bearing libraries
 
-## What I'm working on now
+## What's done (cumulative)
 
-`app/services/cascade_engine.py` is complete and verified against the
-current GraphService interface. About to write pytest tests at
-`tests/test_cascade_engine.py`. Step 3 — FastAPI wiring, a
-`cascade_analyses` table, and the Alembic migration — is next.
+- **Step 3 — API wiring**: `POST /api/v1/analysis/cascade` and
+  `GET /api/v1/analysis/cascade/{id}` are live in
+  `app/api/cascade.py`. The endpoint is idempotent: re-posting the same
+  `observation_id` + `asset_id` + `timestamp` returns the existing record
+  (200) instead of erroring.
+- **Step 3 — persistence**: `cascade_analyses` table exists, Alembic
+  migration applied. `cascade_id` column has a UNIQUE constraint —
+  duplicate detection relies on it.
+- **Step 4 — PR data loaded**: Puerto Rico HIFLD substation dataset is
+  loaded and verified. `GraphService` builds the live DiGraph from it.
+  Cascade scoring runs against real node/edge data.
+- **Step 4 — priorities endpoint**: `GET /api/v1/analysis/priorities`
+  returns `CascadePrioritySummary` list sorted by `priority_score`.
+- **CORS**: middleware added in `main.py` so the dashboard frontend can
+  call the API from a browser.
+- **Tests**: `tests/test_cascade_engine.py` (unit) and
+  `tests/test_cascade_api.py` (integration) both pass. The integration
+  suite hits a real async SQLite DB and includes idempotency coverage.
+- **API reference doc**: `docs/API.md` documents all endpoints with
+  request/response examples captured against the PR dataset.
+
+## What's next — Agentverse integration (Step 5)
+
+The `CascadeAnalysis` JSON produced by `POST /cascade` is the payload the
+Fetch.ai Agentverse agent will consume. Next work:
+
+1. Stand up the Agentverse agent that polls `/priorities` and acts on the
+   top-ranked cascade.
+2. Wire the agent's address into the cascade engine so completed analyses
+   can be pushed (or the agent can pull on a schedule).
+3. End-to-end smoke test: damage observation in → agent receives ranked
+   cascade out.
+
+Nothing in `cascade_engine.py`, `graph_builder.py`, or the Alembic
+migrations should need to change for Step 5.
 
 ## Things to never do
 
