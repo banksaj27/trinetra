@@ -8,6 +8,15 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 DamageLevel = Literal["destroyed", "major-damage", "minor-damage", "no-damage"]
 DependencyType = Literal["power", "water", "communications"]
+EventType = Literal["earthquake", "flood", "storm", "wildfire", "landslide"]
+GroundSensorType = Literal[
+    "seismic",
+    "hydrology",
+    "air_quality",
+    "weather_station",
+    "soil_moisture",
+    "multimodal",
+]
 
 
 class PipelineRunRequest(BaseModel):
@@ -80,6 +89,29 @@ class DamageObservation(BaseModel):
         return value
 
 
+class GroundSensorObservation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    observation_id: str
+    asset_id: str
+    asset_type: str
+    severity_level: Literal["critical", "high", "moderate", "low"]
+    confidence: float
+    source: Literal["ground-sensor"] = "ground-sensor"
+    source_detail: str
+    sensor_type: GroundSensorType
+    lat: float
+    lon: float
+    timestamp: str
+    scenario_time: Optional[str] = None
+    raw: dict[str, Any]
+
+    @field_validator("confidence")
+    @classmethod
+    def _round_confidence(cls, value: float) -> float:
+        return round(float(value), 4)
+
+
 class AssetRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -105,7 +137,10 @@ class PipelineResultResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     run_id: str
+    detected_event_type: EventType
     assets: list[AssetRecord]
     edges: list[DependencyEdge]
     damage_observations: list[DamageObservation]
+    ground_sensor_data_type: GroundSensorType
+    ground_sensor_observations: list[GroundSensorObservation]
 

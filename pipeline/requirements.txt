@@ -1,4 +1,5 @@
 fastapi[standard]
+pandas
 uvicorn[standard]
 pydantic
 pydantic-settings
