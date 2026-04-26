@@ -7,9 +7,9 @@ from math import cos, radians
 import sys
 from typing import Any
 
-try:
+if __package__:
     from .config import REPO_ROOT
-except ImportError:  # Support `cd pipeline && uvicorn main:app`.
+else:  # Support `cd pipeline && uvicorn main:app`.
     from config import REPO_ROOT
 
 

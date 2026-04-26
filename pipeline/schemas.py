@@ -184,4 +184,5 @@ class PipelineResultResponse(BaseModel):
     ground_sensor_data_type: GroundSensorType
     ground_sensor_observations: list[GroundSensorObservation]
     tweet_sentiment_observation: Optional[TweetSentimentObservation] = None
+    cascade_summary: dict[str, Any] = Field(default_factory=dict)
 

@@ -24,16 +24,16 @@ from typing import Any, Awaitable, Callable
 
 log = logging.getLogger(__name__)
 
-# Make the repo root importable so the heuristics package can be found.
+# Make the repo root importable so the eye2 heuristics package can be found.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from eye_2_disaster_hueristics.earthquake_hueristics import classify_earthquake
-from eye_2_disaster_hueristics.flood_hueristics import classify_flood
-from eye_2_disaster_hueristics.landslide_hueristics import classify_landslide
-from eye_2_disaster_hueristics.storm_hueristics import classify_storm
-from eye_2_disaster_hueristics.wildfire_hueristics import classify_wildfire
+from eye2.eye_2_disaster_hueristics.earthquake_hueristics import classify_earthquake
+from eye2.eye_2_disaster_hueristics.flood_hueristics import classify_flood
+from eye2.eye_2_disaster_hueristics.landslide_hueristics import classify_landslide
+from eye2.eye_2_disaster_hueristics.storm_hueristics import classify_storm
+from eye2.eye_2_disaster_hueristics.wildfire_hueristics import classify_wildfire
 
 ProgressCallback = Callable[[str], Awaitable[None] | None]
 

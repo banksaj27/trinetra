@@ -16,8 +16,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-try:
+if __package__:
     from .asset_fetcher import fetch_assets
+    from .cascade_analyzer import compute_cascade_summary
     from .damage_assessor import assess_damage
     from .event_classifier import classify_event
     from .event_sensor_selector import select_ground_sensor_type
@@ -34,8 +35,9 @@ try:
         PipelineResultResponse,
         PipelineRunRequest,
     )
-except ImportError:  # Support `cd pipeline && uvicorn main:app`.
+else:  # Support `cd pipeline && uvicorn main:app`.
     from asset_fetcher import fetch_assets
+    from cascade_analyzer import compute_cascade_summary
     from damage_assessor import assess_damage
     from event_classifier import classify_event
     from event_sensor_selector import select_ground_sensor_type
@@ -71,6 +73,7 @@ class PipelineResult:
     ground_sensor_data_type: str = "multimodal"
     ground_sensor_observations: list[dict[str, Any]] = field(default_factory=list)
     tweet_sentiment_observation: dict[str, Any] | None = None
+    cascade_summary: dict[str, Any] = field(default_factory=dict)
 
     def response_payload(self) -> dict[str, Any]:
         tweet_obs = None
@@ -88,6 +91,7 @@ class PipelineResult:
             ground_sensor_data_type=self.ground_sensor_data_type,
             ground_sensor_observations=self.ground_sensor_observations,
             tweet_sentiment_observation=tweet_obs,
+            cascade_summary=self.cascade_summary,
         )
         return response.model_dump()
 
@@ -336,6 +340,11 @@ async def run_pipeline(params: PipelineRunRequest) -> AsyncIterator[dict[str, An
     result.damage_observations = aggregated_eye1
     result.ground_sensor_observations = eye2_result
     result.tweet_sentiment_observation = eye3_result
+    result.cascade_summary = compute_cascade_summary(
+        result.assets,
+        result.edges,
+        result.damage_observations,
+    )
 
     skipped = len(result.assets) - len(result.damage_observations)
     eye3_status = "found tweet" if eye3_result is not None else "no tweet found"

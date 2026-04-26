@@ -6,12 +6,12 @@ from typing import AsyncIterator
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
 
-try:
+if __package__:
     from .config import get_settings
     from .map_renderer import render_result_page
     from .runner import get_result, run_pipeline, sse_format
     from .schemas import PipelineRunRequest
-except ImportError:  # Support `cd pipeline && uvicorn main:app`.
+else:  # Support `cd pipeline && uvicorn main:app`.
     from config import get_settings
     from map_renderer import render_result_page
     from runner import get_result, run_pipeline, sse_format
@@ -34,83 +34,182 @@ async def index() -> HTMLResponse:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TriNetra AI Pipeline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {{
       color-scheme: dark;
-      --bg: oklch(14% 0.012 250);
-      --panel: oklch(20% 0.018 250);
-      --panel-2: oklch(24% 0.018 250);
-      --text: oklch(94% 0.008 250);
-      --muted: oklch(70% 0.015 250);
-      --line: oklch(34% 0.018 250);
-      --accent: oklch(67% 0.15 230);
-      --accent-strong: oklch(75% 0.17 230);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      --bg-deep: oklch(3.6% 0.006 35);
+      --bg: oklch(6.5% 0.006 35);
+      --panel: oklch(8.4% 0.006 35);
+      --panel-2: oklch(11% 0.006 35);
+      --line: oklch(20% 0.006 35);
+      --line-soft: oklch(15% 0.006 35);
+      --text: oklch(96% 0.004 35);
+      --text-2: oklch(84% 0.004 35);
+      --muted: oklch(62% 0.004 35);
+      --accent: oklch(61% 0.18 36);
+      --accent-glow: oklch(61% 0.18 36 / 0.32);
+      --font-display: "Rajdhani", sans-serif;
+      --font-mono: "Fira Code", monospace;
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
     }}
-    * {{ box-sizing: border-box; }}
+    *, *::before, *::after {{ box-sizing: border-box; }}
     body {{
       margin: 0;
       min-height: 100vh;
+      padding: 56px 0 0;
+      background:
+        radial-gradient(ellipse 55% 42% at 78% 68%, oklch(61% 0.18 36 / 0.12), transparent 72%),
+        linear-gradient(180deg, var(--bg-deep) 0%, var(--bg) 100%);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 15px;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }}
+    .topbar {{
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 10;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 0 40px;
+      background: oklch(4.8% 0.006 35 / 0.9);
+      border-bottom: 1px solid oklch(61% 0.18 36 / 0.18);
+    }}
+    .brand {{
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      min-height: 44px;
+      font-family: var(--font-display);
+      font-size: 22px;
+      letter-spacing: 0.02em;
+      line-height: 1;
+      color: var(--text);
+      align-self: center;
+    }}
+    .status-tag {{
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid oklch(61% 0.18 36 / 0.42);
+      padding: 8px 16px;
+      color: var(--accent);
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      text-transform: none;
+    }}
+    .shell {{
+      min-height: calc(100vh - 56px);
       display: grid;
       place-items: center;
+      padding: clamp(28px, 5vw, 64px) 20px;
       background:
-        radial-gradient(circle at 20% 10%, oklch(28% 0.07 230 / 0.45), transparent 32rem),
-        linear-gradient(145deg, var(--bg), oklch(10% 0.014 260));
-      color: var(--text);
+        linear-gradient(90deg, transparent 0 49%, oklch(61% 0.18 36 / 0.08) 49% 49.1%, transparent 49.1% 100%),
+        repeating-linear-gradient(0deg, transparent 0 72px, oklch(96% 0.004 35 / 0.035) 72px 73px);
+      mask-image: linear-gradient(90deg, transparent, var(--text) 14%, var(--text) 86%, transparent);
     }}
     main {{
-      width: min(760px, calc(100vw - 32px));
-      padding: 34px;
+      width: min(840px, calc(100vw - 32px));
+      padding: clamp(24px, 4vw, 38px);
       border: 1px solid var(--line);
-      border-radius: 24px;
-      background: color-mix(in oklch, var(--panel) 92%, transparent);
-      box-shadow: 0 24px 80px oklch(5% 0.01 250 / 0.38);
+      background: oklch(5% 0.006 35 / 0.9);
+      box-shadow: 0 28px 80px oklch(1% 0.006 35 / 0.58);
     }}
-    h1 {{ margin: 0 0 8px; font-size: 2rem; letter-spacing: -0.03em; }}
-    p {{ margin: 0; color: var(--muted); line-height: 1.5; }}
-    form {{ margin-top: 28px; display: grid; gap: 18px; }}
-    label {{ display: grid; gap: 8px; font-size: 0.86rem; color: var(--muted); }}
+    h1 {{
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: clamp(2.1rem, 5vw, 3.1rem);
+      line-height: 0.98;
+      letter-spacing: 0.01em;
+      color: var(--text);
+    }}
+    p {{ margin: 0; max-width: 68ch; color: var(--text-2); line-height: 1.72; }}
+    form {{
+      margin-top: 20px;
+      display: grid;
+      gap: 18px;
+      padding-top: 20px;
+      border-top: 1px solid var(--line-soft);
+    }}
+    label {{
+      display: grid;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.74rem;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }}
     input {{
       width: 100%;
       border: 1px solid var(--line);
-      border-radius: 12px;
       background: var(--panel-2);
       color: var(--text);
-      padding: 12px 13px;
+      padding: 13px 14px;
       font: inherit;
       outline: none;
+      min-height: 48px;
     }}
-    input:focus {{ border-color: var(--accent); box-shadow: 0 0 0 3px oklch(67% 0.15 230 / 0.18); }}
-    .location-row {{ display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }}
+    input::placeholder {{ color: oklch(50% 0.004 35); }}
+    input:focus {{
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px oklch(61% 0.18 36 / 0.14);
+    }}
+    .location-row {{ display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end; }}
     .grid-3 {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }}
     .grid-2 {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }}
     button, a.button {{
-      border: 0;
-      border-radius: 12px;
+      min-height: 48px;
+      border: 1px solid var(--accent);
       background: var(--accent);
-      color: oklch(12% 0.014 250);
-      padding: 12px 15px;
-      font: inherit;
-      font-weight: 700;
+      color: var(--text);
+      padding: 12px 18px;
+      font-family: var(--font-display);
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
       cursor: pointer;
       text-decoration: none;
       text-align: center;
+      transition: background 180ms var(--ease-out), box-shadow 180ms var(--ease-out), border-color 180ms var(--ease-out);
     }}
-    button:hover, a.button:hover {{ background: var(--accent-strong); }}
+    button:hover, a.button:hover {{ box-shadow: 0 0 24px var(--accent-glow); }}
+    button:disabled {{ cursor: wait; opacity: 0.68; box-shadow: none; }}
     button.secondary {{
-      border: 1px solid var(--line);
-      background: var(--panel-2);
-      color: var(--text);
+      background: transparent;
+      color: var(--accent);
     }}
-    .actions {{ display: flex; justify-content: flex-end; gap: 12px; margin-top: 6px; }}
+    button.secondary:hover {{ background: oklch(61% 0.18 36 / 0.12); color: var(--text); }}
+    .actions {{ display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px; }}
     .progress {{ display: none; margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--line); }}
     .progress.active {{ display: grid; gap: 12px; }}
     .step {{ color: var(--muted); }}
     .step strong {{ color: var(--text); }}
-    .bar {{ height: 8px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }}
-    .bar span {{ display: block; height: 100%; width: 0%; background: var(--accent); transition: width 180ms ease-out; }}
-    .error {{ color: oklch(76% 0.17 28); }}
+    .bar {{ height: 4px; background: var(--panel-2); overflow: hidden; }}
+    .bar span {{
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, oklch(55% 0.14 36), var(--accent), oklch(74% 0.12 52));
+      background-size: 180% 100%;
+      box-shadow: 0 0 18px var(--accent-glow);
+      transition: width 220ms var(--ease-out);
+    }}
+    .error {{ color: oklch(68% 0.2 35); }}
     @media (max-width: 680px) {{
+      body {{ padding-top: 52px; }}
+      .topbar {{ height: 52px; padding: 0 20px; }}
+      .status-tag {{ display: none; }}
       main {{ padding: 24px; }}
       .grid-3, .grid-2, .location-row {{ grid-template-columns: 1fr; }}
       .actions {{ flex-direction: column; }}
@@ -118,9 +217,13 @@ async def index() -> HTMLResponse:
   </style>
 </head>
 <body>
+  <header class="topbar">
+    <div class="brand">TriNetra</div>
+    <div class="status-tag">Pipeline Console</div>
+  </header>
+  <div class="shell">
   <main>
-    <h1>TriNetra AI Pipeline</h1>
-    <p>Fetch infrastructure assets, infer dependencies, compare imagery, and classify asset damage in one in-memory run.</p>
+    <h1>TriNetra Pipeline Console</h1>
 
     <form id="pipeline-form">
       <div class="location-row">
@@ -152,6 +255,7 @@ async def index() -> HTMLResponse:
       <p class="step"><strong id="progress-message">Preparing...</strong><br><span id="progress-detail"></span></p>
     </section>
   </main>
+  </div>
 
   <script>
     const MAPBOX_TOKEN = {_json_for_script(settings.MAPBOX_TOKEN)};
@@ -174,7 +278,7 @@ async def index() -> HTMLResponse:
       document.getElementById("progress-message").textContent = data.message || "Working...";
       document.getElementById("progress-detail").textContent = data.detail || "";
       const pct = Math.max(0, Math.min(100, ((data.step || 0) / (data.total_steps || 7)) * 100));
-      document.getElementById("progress-bar").style.width = `${{pct}}%`;
+      document.getElementById("progress-bar").style.width = `${{pct > 0 ? pct : 6}}%`;
     }}
 
     async function consumeSse(response) {{

@@ -122,40 +122,44 @@ AREA_DATASETS: dict[str, AreaDatasetConfig] = {
         key="ems_stations",
         label="EMS Stations",
         url=(
-            "https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services"
-            "/EMS_Stations_1/FeatureServer/0/query"
+            "https://services1.arcgis.com/wQnFk5ouCfPzTlPw/arcgis/rest/services"
+            "/Emergency_Medical_Service_EMS_Stations/FeatureServer/0/query"
         ),
         asset_type="ems_station",
         criticality_tier=2,
         fields=FieldMapping(hifld_id="OBJECTID", name="NAME"),
+        hifld_id_fallbacks=["FID"],
         name_fallbacks=["Name"],
         extra_metadata_fields=[
             "TELEPHONE",
             "ADDRESS",
             "CITY",
             "STATE",
-            "STATE_PROV",
             "COUNTY",
-            "TYPE",
+            "ZIP",
+            "NAICSDESCR",
         ],
     ),
     "water_treatment": AreaDatasetConfig(
         key="water_treatment",
-        label="Water Treatment Plants",
+        label="Community Water Systems (SDWIS)",
         url=(
-            "https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services"
-            "/Water_Treatment_Plants_1/FeatureServer/0/query"
+            "https://services.arcgis.com/cJ9YHowT8TU7DUyn/arcgis/rest/services"
+            "/Community_Water_Systems_June_8_2024_Pts/FeatureServer/447/query"
         ),
         asset_type="water_treatment",
         criticality_tier=1,
-        fields=FieldMapping(hifld_id="OBJECTID", name="PWSNAME"),
-        name_fallbacks=["NAME", "Name"],
+        fields=FieldMapping(hifld_id="OBJECTID", name="PWS_NAME"),
+        name_fallbacks=["PWSNAME", "NAME", "Name"],
         extra_metadata_fields=[
-            "PRIMACY_AGENCY_CODE",
             "PWSID",
-            "PWSNAME",
-            "OWNER_TYPE_CODE",
+            "PWS_TYPE",
             "POPULATION_SERVED_COUNT",
+            "SOURCE_WATER_TYPE",
+            "PRIMACY_AGENCY",
+            "EPA_REGION",
+            "COUNTY_SERVED",
+            "CITY_SERVED",
         ],
         fallback_sources=[
             AreaDatasetSource(
@@ -172,22 +176,21 @@ AREA_DATASETS: dict[str, AreaDatasetConfig] = {
         key="nine11_centers",
         label="911 Centers",
         url=(
-            "https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services"
-            "/Public_Safety_Answering_Points_911_Centers_1/FeatureServer/0/query"
+            "https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/rest/services"
+            "/911_Master_PSAP_Registry/FeatureServer/0/query"
         ),
         asset_type="911_center",
         criticality_tier=1,
-        fields=FieldMapping(hifld_id="OBJECTID", name="PSAP_NAME"),
-        name_fallbacks=["psap_name", "NAME", "name"],
+        fields=FieldMapping(hifld_id="ObjectId", name="PSAP_Name"),
+        hifld_id_fallbacks=["OBJECTID", "PSAP_ID"],
+        name_fallbacks=["PSAP_NAME", "psap_name", "NAME", "name"],
         extra_metadata_fields=[
-            "PSAP_NAME",
-            "psap_name",
-            "COUNTY",
-            "county",
-            "STATE",
-            "state",
-            "TELEPHONE",
-            "telephone",
+            "PSAP_ID",
+            "PSAP_Name",
+            "County",
+            "City",
+            "State",
+            "Date_Last_Modified",
         ],
     ),
     "shelters": AreaDatasetConfig(
@@ -568,10 +571,10 @@ def _extract_name(props: dict[str, Any], config: AreaDatasetConfig) -> str:
             return f"{city or county} cell tower"
 
     if config.key == "nine11_centers":
-        psap_name = _get_first(props, ["PSAP_NAME", "psap_name", "NAME", "name"])
+        psap_name = _get_first(props, ["PSAP_Name", "PSAP_NAME", "psap_name", "NAME", "name"])
         if psap_name:
             return str(psap_name).strip()
-        county = _get_first(props, ["COUNTY", "county"])
+        county = _get_first(props, ["County", "COUNTY", "county"])
         if county:
             return f"{str(county).strip()} 911 Center"
 

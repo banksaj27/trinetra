@@ -18,13 +18,10 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import logging
 import math
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Optional
-
-_log = logging.getLogger(__name__)
 
 try:
     from .tweet_fetcher import fetch_latest_tweet
@@ -110,31 +107,8 @@ async def assess_tweet_sentiment(
 
     Returns
     -------
-    A single observation dict, or None if no tweet was found or any error occurred.
-    Never raises — any unhandled failure returns None so the aggregator drops Eye 3's
-    weight cleanly.
+    A single observation dict, or None if no tweet was found.
     """
-    try:
-        return await _assess_tweet_sentiment_impl(
-            latitude, longitude, disaster_date, event_type, progress
-        )
-    except Exception as exc:
-        _log.error(
-            "Eye 3 assess_tweet_sentiment failed unexpectedly — "
-            "returning None so aggregation proceeds without Eye 3: %s",
-            exc,
-            exc_info=True,
-        )
-        return None
-
-
-async def _assess_tweet_sentiment_impl(
-    latitude: float,
-    longitude: float,
-    disaster_date: str,
-    event_type: str,
-    progress: ProgressCallback | None,
-) -> Optional[dict[str, Any]]:
     await _notify(progress, f"Eye 3 — searching Twitter for '{event_type}' tweets near {disaster_date}")
 
     try:

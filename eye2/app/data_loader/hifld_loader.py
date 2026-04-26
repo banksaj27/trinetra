@@ -40,6 +40,7 @@ class DatasetSource:
     state_field: str
     fields: FieldMapping
     extra_metadata_fields: list[str] = field(default_factory=list)
+    where_override: str | None = None
 
 
 @dataclass
@@ -52,6 +53,7 @@ class DatasetConfig:
     fields: FieldMapping
     extra_metadata_fields: list[str] = field(default_factory=list)
     fallback_sources: list[DatasetSource] = field(default_factory=list)
+    where_override: str | None = None
 
 
 DATASETS: list[DatasetConfig] = [
@@ -112,39 +114,48 @@ DATASETS: list[DatasetConfig] = [
     DatasetConfig(
         label="EMS Stations",
         url=(
-            "https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services"
-            "/Emergency_Medical_Service__EMS__Stations/FeatureServer/0/query"
+            "https://services1.arcgis.com/wQnFk5ouCfPzTlPw/arcgis/rest/services"
+            "/Emergency_Medical_Service_EMS_Stations/FeatureServer/0/query"
         ),
         asset_type="ems_station",
         criticality_tier=2,
         state_field="STATE",
-        fields=FieldMapping(hifld_id="OBJECTID", name="NAME", name_fallbacks=["Name"]),
+        fields=FieldMapping(
+            hifld_id="OBJECTID",
+            name="NAME",
+            hifld_id_fallbacks=["FID"],
+            name_fallbacks=["Name"],
+        ),
         extra_metadata_fields=[
             "TELEPHONE",
             "ADDRESS",
             "CITY",
             "STATE",
-            "STATE_PROV",
             "COUNTY",
-            "TYPE",
+            "ZIP",
+            "NAICSDESCR",
         ],
     ),
     DatasetConfig(
-        label="Water Treatment Plants",
+        label="Community Water Systems (SDWIS)",
         url=(
-            "https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services"
-            "/Water_Treatment_Plants/FeatureServer/0/query"
+            "https://services.arcgis.com/cJ9YHowT8TU7DUyn/arcgis/rest/services"
+            "/Community_Water_Systems_June_8_2024_Pts/FeatureServer/447/query"
         ),
         asset_type="water_treatment",
         criticality_tier=1,
-        state_field="PRIMACY_AGENCY_CODE",
-        fields=FieldMapping(hifld_id="OBJECTID", name="PWSNAME", name_fallbacks=["NAME", "Name"]),
+        state_field="PWSID",
+        where_override="PWSID LIKE '{region}%'",
+        fields=FieldMapping(hifld_id="OBJECTID", name="PWS_NAME", name_fallbacks=["PWSNAME", "NAME", "Name"]),
         extra_metadata_fields=[
-            "PRIMACY_AGENCY_CODE",
             "PWSID",
-            "PWSNAME",
-            "OWNER_TYPE_CODE",
+            "PWS_TYPE",
             "POPULATION_SERVED_COUNT",
+            "SOURCE_WATER_TYPE",
+            "PRIMACY_AGENCY",
+            "EPA_REGION",
+            "COUNTY_SERVED",
+            "CITY_SERVED",
         ],
         fallback_sources=[
             DatasetSource(
@@ -161,26 +172,25 @@ DATASETS: list[DatasetConfig] = [
     DatasetConfig(
         label="911 Dispatch Centers",
         url=(
-            "https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services"
-            "/PSAP_911_Service_Area_Boundaries/FeatureServer/0/query"
+            "https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/rest/services"
+            "/911_Master_PSAP_Registry/FeatureServer/0/query"
         ),
         asset_type="911_center",
         criticality_tier=1,
-        state_field="STATE",
+        state_field="State",
         fields=FieldMapping(
-            hifld_id="OBJECTID",
-            name="PSAP_NAME",
-            name_fallbacks=["psap_name", "NAME", "name"],
+            hifld_id="ObjectId",
+            name="PSAP_Name",
+            hifld_id_fallbacks=["OBJECTID", "PSAP_ID"],
+            name_fallbacks=["PSAP_NAME", "psap_name", "NAME", "name"],
         ),
         extra_metadata_fields=[
-            "PSAP_NAME",
-            "psap_name",
-            "COUNTY",
-            "county",
-            "STATE",
-            "state",
-            "TELEPHONE",
-            "telephone",
+            "PSAP_ID",
+            "PSAP_Name",
+            "County",
+            "City",
+            "State",
+            "Date_Last_Modified",
         ],
     ),
 ]
@@ -231,8 +241,12 @@ async def _fetch_dataset_geojson(
     offset = 0
 
     while True:
+        if source.where_override is not None:
+            where_clause = source.where_override.format(region=region)
+        else:
+            where_clause = f"{source.state_field}='{region}'"
         params: dict[str, Any] = {
-            "where": f"{source.state_field}='{region}'",
+            "where": where_clause,
             "outFields": "*",
             "f": "geojson",
             "resultRecordCount": PAGE_SIZE,
@@ -264,6 +278,7 @@ async def _fetch_dataset_geojson_with_fallbacks(
         state_field=config.state_field,
         fields=config.fields,
         extra_metadata_fields=config.extra_metadata_fields,
+        where_override=config.where_override,
     )
     sources = [primary_source, *config.fallback_sources]
     failures: list[str] = []
@@ -338,11 +353,11 @@ async def inspect_all_dataset_fields() -> None:
 
 
 def _extract_name(props: dict[str, Any], fields: FieldMapping) -> str:
-    if fields.name == "PSAP_NAME":
-        psap_name = _get_first(props, ["PSAP_NAME", "psap_name", "NAME", "name"])
+    if fields.name in ("PSAP_NAME", "PSAP_Name"):
+        psap_name = _get_first(props, ["PSAP_Name", "PSAP_NAME", "psap_name", "NAME", "name"])
         if psap_name:
             return str(psap_name).strip()
-        county = _get_first(props, ["COUNTY", "county"])
+        county = _get_first(props, ["County", "COUNTY", "county"])
         if county:
             return f"{str(county).strip()} 911 Center"
 

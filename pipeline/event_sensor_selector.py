@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from .schemas import EventType, GroundSensorType
+if __package__:
+    from .schemas import EventType, GroundSensorType
+else:  # Support `cd pipeline && uvicorn main:app`.
+    from schemas import EventType, GroundSensorType
 
 EVENT_TO_SENSOR_TYPE: dict[EventType, GroundSensorType] = {
     "earthquake": "seismic",

@@ -13,10 +13,10 @@ from typing import Any, Awaitable, Callable
 import numpy as np
 from PIL import Image
 
-try:
+if __package__:
     from .config import REPO_ROOT, get_settings
     from .schemas import DamageObservation
-except ImportError:  # Support `cd pipeline && uvicorn main:app`.
+else:  # Support `cd pipeline && uvicorn main:app`.
     from config import REPO_ROOT, get_settings
     from schemas import DamageObservation
 
