@@ -127,13 +127,12 @@ async def list_priorities(
             or cascade_payload.get("affected_assets", [])
             or []
         )
-        affected = [
-            PriorityAffectedAsset(
-                **a,
-                name=_lookup_name(a.get("asset_id")),
-            )
-            for a in raw_affected
-        ]
+        affected = []
+        for a in raw_affected:
+            data = dict(a)
+            if not data.get("name"):
+                data["name"] = _lookup_name(data.get("asset_id"))
+            affected.append(PriorityAffectedAsset(**data))
         summaries.append(
             CascadePrioritySummary(
                 id=r.id,
