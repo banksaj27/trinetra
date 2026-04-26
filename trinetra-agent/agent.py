@@ -109,7 +109,7 @@ async def handle_message(ctx: Context, sender: str, msg: ChatMessage) -> None:
             ctx.logger.exception("Unhandled error in message handler")
             reply = await formatter.format_response("error", str(exc), text)
 
-    reply = "🛰️ Eye 1 coordinating · Eye 2 coordinating\n\n" + reply
+    reply = "🛰️ Eye 1 coordinating · Eye 2 coordinating · Eye 3 coordinating\n\n" + reply
     await ctx.send(
         sender,
         ChatMessage(

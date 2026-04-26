@@ -25,3 +25,15 @@ class Eye2Response(Model):
     source: str
     message: str
     data: Optional[dict] = None
+
+
+class Eye3Query(Model):
+    query_type: str  # "ping"
+    payload: Optional[str] = None
+
+
+class Eye3Response(Model):
+    ok: bool
+    source: str
+    message: str
+    data: Optional[dict] = None
