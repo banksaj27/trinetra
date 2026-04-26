@@ -18,8 +18,12 @@ import config
 import formatter
 import router
 from api_client import TPIError, TriNetraClient
+from shared_models import Eye1Query, Eye1Response
 
 config.validate()
+
+EYE1_AGENT_ADDRESS = "agent1qwngtn9jy6ktv4ltf4k0j2asm69tvjccwnrpsn7dy3aup7thxw7d5vtj5xs"
+EYE2_AGENT_ADDRESS = "agent1qdd3hdhlvcxy665urxa6kqzyga8jre7jc3l05v7qtedmx69v3ueg26s2pr3"
 
 agent = Agent(
     name=config.AGENT_NAME,
@@ -84,6 +88,10 @@ async def handle_message(ctx: Context, sender: str, msg: ChatMessage) -> None:
         ),
     )
 
+    if EYE1_AGENT_ADDRESS:
+        await ctx.send(EYE1_AGENT_ADDRESS, Eye1Query(query_type="ping"))
+        ctx.logger.info("Pinged Eye 1 for asset index status")
+
     text = _extract_text(msg)
     if not text:
         reply = await formatter.format_response("help", None, "")
@@ -117,6 +125,11 @@ async def handle_message(ctx: Context, sender: str, msg: ChatMessage) -> None:
 @protocol.on_message(ChatAcknowledgement)
 async def handle_ack(ctx: Context, sender: str, msg: ChatAcknowledgement) -> None:
     pass
+
+
+@agent.on_message(model=Eye1Response)
+async def handle_eye1_response(ctx: Context, sender: str, msg: Eye1Response) -> None:
+    ctx.logger.info(f"Eye 1 reported: {msg.message} | data={msg.data}")
 
 
 agent.include(protocol, publish_manifest=True)
