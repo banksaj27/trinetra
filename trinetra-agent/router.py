@@ -35,6 +35,14 @@ Classify the user's message into exactly one of these intents:
    going down", "model the failure of cell tower 12".
    Fields: asset_query (string, the name/phrase identifying the asset),
    damage_level (one of: destroyed, major, minor, none — default destroyed).
+   When extracting asset_query, use only the proper noun or location name.
+   Strip descriptive type words like "substation", "hospital", "plant",
+   "tower", "water treatment", "cell tower", "power". The search backend
+   matches asset names (e.g. "Lago Dos Bocas", "AUXILIO MUTUO HOSPITAL",
+   "Arecibo"), not asset types. Examples:
+   - "what if the Arecibo cell tower fails" → asset_query: "Arecibo"
+   - "what cascades from Lago Dos Bocas being destroyed" → asset_query: "Lago Dos Bocas"
+   - "AUXILIO MUTUO hospital damage" → asset_query: "AUXILIO MUTUO"
 
 3. "lookup" — user references a specific cascade by UUID. Example: "tell me
    about cascade c9f4e2a1-...".

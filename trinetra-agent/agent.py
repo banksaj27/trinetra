@@ -18,12 +18,13 @@ import config
 import formatter
 import router
 from api_client import TPIError, TriNetraClient
-from shared_models import Eye1Query, Eye1Response
+from shared_models import Eye1Query, Eye1Response, Eye2Query, Eye2Response, Eye3Query, Eye3Response
 
 config.validate()
 
 EYE1_AGENT_ADDRESS = "agent1qwngtn9jy6ktv4ltf4k0j2asm69tvjccwnrpsn7dy3aup7thxw7d5vtj5xs"
 EYE2_AGENT_ADDRESS = "agent1qdd3hdhlvcxy665urxa6kqzyga8jre7jc3l05v7qtedmx69v3ueg26s2pr3"
+EYE3_AGENT_ADDRESS = "agent1qwkpaz8l5t4fxlq9uncv4fk5gtnmgk87neuxdwkzygu4cze327kjjzl6cr6"
 
 agent = Agent(
     name=config.AGENT_NAME,
@@ -92,6 +93,14 @@ async def handle_message(ctx: Context, sender: str, msg: ChatMessage) -> None:
         await ctx.send(EYE1_AGENT_ADDRESS, Eye1Query(query_type="ping"))
         ctx.logger.info("Pinged Eye 1 for asset index status")
 
+    if EYE2_AGENT_ADDRESS:
+        await ctx.send(EYE2_AGENT_ADDRESS, Eye2Query(query_type="ping"))
+        ctx.logger.info("Pinged Eye 2 for heuristic status")
+
+    if EYE3_AGENT_ADDRESS:
+        await ctx.send(EYE3_AGENT_ADDRESS, Eye3Query(query_type="ping"))
+        ctx.logger.info("Pinged Eye 3 for cascade status")
+
     text = _extract_text(msg)
     if not text:
         reply = await formatter.format_response("help", None, "")
@@ -131,6 +140,16 @@ async def handle_ack(ctx: Context, sender: str, msg: ChatAcknowledgement) -> Non
 @agent.on_message(model=Eye1Response)
 async def handle_eye1_response(ctx: Context, sender: str, msg: Eye1Response) -> None:
     ctx.logger.info(f"Eye 1 reported: {msg.message} | data={msg.data}")
+
+
+@agent.on_message(model=Eye2Response)
+async def handle_eye2_response(ctx: Context, sender: str, msg: Eye2Response) -> None:
+    ctx.logger.info(f"Eye 2 reported: {msg.message} | data={msg.data}")
+
+
+@agent.on_message(model=Eye3Response)
+async def handle_eye3_response(ctx: Context, sender: str, msg: Eye3Response) -> None:
+    ctx.logger.info(f"Eye 3 reported: {msg.message} | data={msg.data}")
 
 
 agent.include(protocol, publish_manifest=True)
