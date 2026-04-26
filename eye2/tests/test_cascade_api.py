@@ -118,6 +118,35 @@ async def test_post_then_get_round_trip(client):
     assert fetched == posted
 
 
+async def test_post_is_idempotent(client, db_engine):
+    root_id = _seed_graph()
+    payload = {
+        "observation_id": "obs-api-idempotent-1",
+        "asset_id": str(root_id),
+        "damage_level": "destroyed",
+        "confidence": 0.9,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    first = await client.post("/api/v1/analysis/cascade", json=payload)
+    assert first.status_code == 200, first.text
+    second = await client.post("/api/v1/analysis/cascade", json=payload)
+    assert second.status_code == 200, second.text
+
+    assert first.json() == second.json()
+
+    cascade_id = first.json()["cascade_id"]
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+    async with session_factory() as session:
+        count = (
+            await session.execute(
+                text("SELECT COUNT(*) FROM cascade_analyses WHERE cascade_id = :cid"),
+                {"cid": cascade_id},
+            )
+        ).scalar_one()
+    assert count == 1
+
+
 async def test_get_unknown_id_returns_404(client):
     resp = await client.get(f"/api/v1/analysis/cascade/{uuid.uuid4()}")
     assert resp.status_code == 404

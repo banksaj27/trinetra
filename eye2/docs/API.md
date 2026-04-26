@@ -204,7 +204,12 @@ Captured against the loaded Puerto Rico HIFLD dataset for substation
 |--------|------|------|
 | `400`  | `asset_id` is not a node in the dependency graph. | `{"detail":"Root asset 00000000-0000-0000-0000-000000000000 not in dependency graph"}` |
 | `422`  | Request body fails validation (missing/invalid fields). | `{"detail":[{"type":"missing","loc":["body","asset_id"],"msg":"Field required","input":{"observation_id":"x"}}, ...]}` |
-| `500`  | ⚠ Re-POSTing the **same** `observation_id` + `asset_id` + `timestamp` produces an identical `cascade_id`, which violates a UNIQUE constraint on the persisted row. Vary `observation_id` (or `timestamp`) between test runs. The example payload above was used to produce the captured response; running it a second time without changing those fields will 500. | `{"detail":"Internal Server Error"}` |
+
+**Idempotency.** `cascade_id` is a deterministic hash of
+`observation_id` + `asset_id` + `timestamp`. Re-POSTing the same payload
+returns the existing record with `200` (same response body, same `id`,
+no new row inserted). Safe to retry; safe to fire from a re-rendering
+client.
 
 ---
 

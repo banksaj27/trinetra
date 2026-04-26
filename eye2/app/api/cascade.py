@@ -6,6 +6,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -60,10 +61,22 @@ async def create_cascade(
         cascade=result.model_dump(mode="json"),
     )
     db.add(record)
-    await db.commit()
-    await db.refresh(record)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        record = (
+            await db.execute(
+                select(CascadeAnalysisRecord).where(
+                    CascadeAnalysisRecord.cascade_id == result.cascade_id
+                )
+            )
+        ).scalar_one()
+    else:
+        await db.refresh(record)
 
-    return StoredCascadeAnalysis(id=record.id, **result.model_dump())
+    analysis = CascadeAnalysis.model_validate(record.cascade)
+    return StoredCascadeAnalysis(id=record.id, **analysis.model_dump())
 
 
 @router.get("/priorities", response_model=list[CascadePrioritySummary])
