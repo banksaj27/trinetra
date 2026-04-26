@@ -143,6 +143,36 @@ class DependencyEdge(BaseModel):
     criticality: str
 
 
+class TweetSentimentObservation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    observation_id: str
+    eye_3_damage_class: Literal["no-damage", "minor-damage", "major-damage"]
+    eye_3_class_probs: dict[str, float]
+    confidence: float
+    source: Literal["social-media"] = "social-media"
+    source_detail: str
+    tweet_text: str
+    query: str
+    lat: float
+    lon: float
+    timestamp: str
+    raw: dict[str, Any]
+
+    @field_validator("confidence")
+    @classmethod
+    def _round_confidence(cls, value: float) -> float:
+        return round(float(value), 4)
+
+    @field_validator("eye_3_class_probs")
+    @classmethod
+    def _validate_eye3_probs(cls, value: dict) -> dict:
+        expected = {"no-damage", "minor-damage", "major-damage"}
+        if set(value) != expected:
+            raise ValueError(f"eye_3_class_probs must contain exactly: {sorted(expected)}")
+        return {k: round(float(v), 6) for k, v in value.items()}
+
+
 class PipelineResultResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -153,4 +183,5 @@ class PipelineResultResponse(BaseModel):
     damage_observations: list[DamageObservation]
     ground_sensor_data_type: GroundSensorType
     ground_sensor_observations: list[GroundSensorObservation]
+    tweet_sentiment_observation: Optional[TweetSentimentObservation] = None
 
