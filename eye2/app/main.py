@@ -2,8 +2,9 @@ from contextlib import asynccontextmanager
 import logging
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import assets, dependencies, graph, loader
+from app.api import assets, cascade, dependencies, graph, loader
 from app.database import async_session_factory
 from app.services.graph_builder import graph_service
 
@@ -28,10 +29,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# TODO: tighten allow_origins for production
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(assets.router)
 app.include_router(dependencies.router)
 app.include_router(graph.router)
 app.include_router(loader.router)
+app.include_router(cascade.router)
 
 
 @app.get("/health")
