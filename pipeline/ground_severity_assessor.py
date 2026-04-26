@@ -14,12 +14,15 @@ Output keys per observation:
 from __future__ import annotations
 
 import inspect
+import logging
 import math
 import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable
+
+log = logging.getLogger(__name__)
 
 # Make the repo root importable so the heuristics package can be found.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -127,7 +130,30 @@ async def assess_ground_severity(
     -------
     List of observation dicts, one per asset, each containing
     ``eye_2_damage_class`` and ``eye_2_class_probs``.
+    Returns an empty list on any unhandled error so the aggregator can safely
+    drop Eye 2's weight rather than crashing the pipeline.
     """
+    try:
+        return await _assess_ground_severity_impl(
+            assets, sensor_rows, event_type, sensor_type, progress
+        )
+    except Exception as exc:
+        log.error(
+            "Eye 2 assess_ground_severity failed unexpectedly — "
+            "returning empty list so aggregation can proceed without Eye 2: %s",
+            exc,
+            exc_info=True,
+        )
+        return []
+
+
+async def _assess_ground_severity_impl(
+    assets: list[dict[str, Any]],
+    sensor_rows: list[dict[str, Any]],
+    event_type: str,
+    sensor_type: str,
+    progress: ProgressCallback | None,
+) -> list[dict[str, Any]]:
     # Aggregate once across all matching rows — same result for every asset.
     log_probs = _aggregate_log_probs(sensor_rows, event_type)
     damage_class = max(log_probs, key=log_probs.get)
