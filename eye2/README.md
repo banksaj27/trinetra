@@ -64,6 +64,14 @@ uvicorn app.main:app --reload
 
 API docs available at <http://localhost:8000/docs>.
 
+## API Reference
+
+The cascade engine endpoints (consumed by the website dashboard and the
+Fetch.ai Agentverse agent) are documented in **[`docs/API.md`](docs/API.md)** —
+prose reference with field-by-field schemas, real captured response payloads,
+error responses, and an end-to-end walkthrough. Use that doc first;
+`/docs` (Swagger) is the live machine-truth surface.
+
 ## API Overview
 
 ### Assets — `/api/v1/assets`

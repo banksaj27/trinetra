@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 import logging
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import assets, cascade, dependencies, graph, loader
 from app.database import async_session_factory
@@ -26,6 +27,15 @@ app = FastAPI(
     description="REST API for geo-located infrastructure assets and their dependency relationships.",
     version="0.1.0",
     lifespan=lifespan,
+)
+
+# TODO: tighten allow_origins for production
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(assets.router)
